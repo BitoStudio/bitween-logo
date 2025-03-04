@@ -1,0 +1,21 @@
+* {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -o-user-select: none;
+    user-select: none;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  
+  html,
+  body,
+  .page {
+    position: fixed;
+    width: 100dvw;
+    height: 100dvh;
+    touch-action: none;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: none;
+  }

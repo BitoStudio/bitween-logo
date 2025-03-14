@@ -5,8 +5,16 @@ let angleAcceleration1 = 0;
 let angle2 = 0;
 let angleVelocity2 = 0;
 let angleAcceleration2 = 0;
-let gravity = 0.05;
+let gravity = 0.00002;
 let damping = 0.995;
+
+// Initial angles
+let initialAngle1;
+let initialAngle2;
+
+// Return to initial state variables
+let returnForce = 0.0002; // Strength of the return force
+let returnThreshold = 1; // Threshold to determine if phone is horizontal
 
 // Stick properties
 let stickLength = 300;
@@ -16,7 +24,6 @@ let stickMass = 10;
 let ball1, ball2, cube1, cube2;
 
 function setup() {
-
   ball1 = {
     mass: random(5, 20),
     radius: 40,
@@ -41,6 +48,9 @@ function setup() {
     position: { x: 0, y: 0 }
   };
 
+  initialAngle1 = PI/4;
+  initialAngle2 = PI/4 + PI/2;
+
   createCanvas(windowWidth, windowHeight);
   
   // Check for device orientation permission
@@ -62,9 +72,9 @@ function setup() {
     permissionGranted = true;
   }
   
-  // Initialize the system with a random angle
-  angle1 = random(-PI/6, PI/6);
-  angle2 = angle1 + random(PI/4, PI*3/4);
+  // Initialize the system with initial angles
+  angle1 = initialAngle1;
+  angle2 = initialAngle2;
   updatePositions();
 }
 
@@ -123,6 +133,12 @@ function calculateCenterOfMassofCubes() {
   return { x: centerX, y: centerY };
 }
 
+function isPhoneHorizontal(dx, dy) {
+  // Check if the phone is relatively horizontal
+  // This is true when both rotationX and rotationY are close to zero
+  return abs(dx) < returnThreshold && abs(dy) < returnThreshold;
+}
+
 function draw() {
   if (!permissionGranted) {
     background(200);
@@ -134,35 +150,53 @@ function draw() {
   
   background(240);
   
+  // Initialize forces
+  let returnToInitialState = false;
+  let dx = 0, dy = 0;
+  
   // Apply physics based on device orientation
   if (rotationY !== undefined && rotationX !== undefined) {
     // Get the tilt of the device and use it as force
-    const dx = constrain(rotationY, -3, 3);
-    const dy = constrain(rotationX, -3, 3);
+    dx = constrain(rotationY, -3, 3);
+    dy = constrain(rotationX, -3, 3);
     
-    // Calculate torque based on the tilt and the current balance of the system
-    const com1 = calculateCenterOfMassofBalls();
-    const com2 = calculateCenterOfMassofCubes();
+    // Check if the phone is horizontal
+    returnToInitialState = isPhoneHorizontal(dx, dy);
     
-    // Calculate the offset of the center of mass from the pivot point
-    const offsetX1 = com1.x - width/2;
-    const offsetY1 = com1.y - height/2;
-    const offsetX2 = com2.x - width/2;
-    const offsetY2 = com2.y - height/2;
-    
-    // Calculate the torque (cross product simplified for 2D)
-    // The torque is stronger when the center of mass is further from the pivot
-    // and when the device is tilted more
-    const torque1 = offsetX1 * dy - offsetY1 * dx;
-    const torque2 = offsetX2 * dy - offsetY2 * dx;
-    
-    // Apply the torque as angular acceleration
-    angleAcceleration1 = -torque1 * gravity;
-    angleAcceleration2 = -torque2 * gravity;
+    if (!returnToInitialState) {
+      // Normal physics behavior - respond to tilt
+      const com1 = calculateCenterOfMassofBalls();
+      const com2 = calculateCenterOfMassofCubes();
+      
+      // Calculate the offset of the center of mass from the pivot point
+      const offsetX1 = com1.x - width/2;
+      const offsetY1 = com1.y - height/2;
+      const offsetX2 = com2.x - width/2;
+      const offsetY2 = com2.y - height/2;
+      
+      // Calculate the torque (cross product simplified for 2D)
+      const torque1 = offsetX1 * dy - offsetY1 * dx;
+      const torque2 = offsetX2 * dy - offsetY2 * dx;
+      
+      // Apply the torque as angular acceleration
+      angleAcceleration1 = -torque1 * gravity;
+      angleAcceleration2 = -torque2 * gravity;
+    }
   } else {
     // If no sensor data, use a simple oscillation for testing
     angleAcceleration1 = -gravity * sin(angle1);
     angleAcceleration2 = -gravity * sin(angle2);
+  }
+  
+  // When phone is horizontal, apply return force toward initial state
+  if (returnToInitialState) {
+    // Calculate angle differences and apply return force proportional to the difference
+    const angleDiff1 = (initialAngle1 - (angle1 % (2 * PI))) % (2 * PI);
+    const angleDiff2 = (initialAngle2 - (angle2 % (2 * PI))) % (2 * PI);
+    
+    // Apply force to gradually return to initial state
+    angleAcceleration1 = angleDiff1 * returnForce;
+    angleAcceleration2 = angleDiff2 * returnForce;
   }
   
   // Update physics
@@ -178,59 +212,56 @@ function draw() {
   updatePositions();
   
   // Draw the system
-  
-  // Draw the center pivot
-  // fill(100);
-  // stroke(0);
-  // strokeWeight(2);
-  // ellipse(width/2, height/2, 20, 20);
-  
-  // Draw the stick
   strokeWeight(10);
   stroke(0);
   line(ball1.position.x, ball1.position.y, ball2.position.x, ball2.position.y);
   line(cube1.position.x, cube1.position.y, cube2.position.x, cube2.position.y);
   
+  // Draw the bezier
+
   // Draw the balls
   noStroke();
   
-  // Ball 1 (heavier)
+  // Ball 1
   fill(0);
   ellipse(ball1.position.x, ball1.position.y, ball1.radius * 2, ball1.radius * 2);
   
-  // Ball 2 (lighter)
+  // Ball 2
   fill(0);
   ellipse(ball2.position.x, ball2.position.y, ball2.radius * 2, ball2.radius * 2);
   
-  // Draw the center of mass
-  // const com1 = calculateCenterOfMassofBalls();
-  // fill(0, 200, 0, 150);
-  // ellipse(com1.x, com1.y, 15, 15);
-  
+  // Draw the cubes
   fill(0);
   rectMode(CENTER);
   rect(cube1.position.x, cube1.position.y, cube1.length * 2);
   
-  // Ball 2 (lighter)
   fill(0);
   rectMode(CENTER);
   rect(cube2.position.x, cube2.position.y, cube2.length * 2);
 
-  // Display debugging info
+  // Debug information - uncomment if needed
+  if (returnToInitialState) {
+    fill(0, 200, 0);
+    noStroke();
+    ellipse(width/2, height/2, 20, 20); // Green indicator when returning to initial state
+  }
+  
+  // Debug text
   fill(0);
   textSize(16);
   textAlign(LEFT, TOP);
-  text(`Angle: ${angle1.toFixed(2)}`, 20, 20);
-  text(`Angular Velocity: ${angleVelocity1.toFixed(4)}`, 20, 40);
-  text(`Angular Acceleration: ${angleAcceleration1.toFixed(4)}`, 20, 60);
-  // text(`Center of mass offset of ball: (${(com1.x - width/2).toFixed(2)}, ${(com1.y - height/2).toFixed(2)})`, 20, 80);
-  // text(`Center of mass offset of cube: (${(com2.x - width/2).toFixed(2)}, ${(com2.y - height/2).toFixed(2)})`, 20, 80);
-  
-  if (rotationX !== undefined && rotationY !== undefined) {
-    text(`Device rotation: X=${rotationX.toFixed(2)}, Y=${rotationY.toFixed(2)}`, 20, 100);
-  } else {
-    text("No sensor data detected. Try on a mobile device.", 20, 100);
+  if (returnToInitialState) {
+    text("Returning to initial state", 20, 20);
   }
+  
+  // Optional: display more debugging info
+  
+  text(`Angle1: ${angle1.toFixed(2)}, Target: ${initialAngle1.toFixed(2)}`, 20, 40);
+  text(`Angle2: ${angle2.toFixed(2)}, Target: ${initialAngle2.toFixed(2)}`, 20, 60);
+  if (rotationX !== undefined && rotationY !== undefined) {
+    text(`Device rotation: X=${rotationX.toFixed(2)}, Y=${rotationY.toFixed(2)}`, 20, 80);
+  }
+  
 }
 
 function windowResized() {
